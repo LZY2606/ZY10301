@@ -455,11 +455,25 @@ class SuspendTransformConfiguration @InternalSuspendTransformConfigurationApi co
      * Note: This `Map` cannot be empty.
      * The `List` values cannot be empty.
      */
-    val transformers: Map<TargetPlatform, List<Transformer>>
+    val transformers: Map<TargetPlatform, List<Transformer>>,
+
+    /**
+     * Optional stable bridge manifest output.
+     *
+     * When `null` (the default), no manifest is emitted. When present, the compiler
+     * plugin records every generated bridge member and publishes a deterministic
+     * manifest file after a successful compilation.
+     *
+     * Appended as the last property because the configuration is serialized with
+     * ProtoBuf and field order is part of the compatibility surface.
+     *
+     * @since 0.15.0
+     */
+    val manifest: ManifestConfiguration? = null,
 ) {
 
     override fun toString(): String {
-        return "SuspendTransformConfiguration(transformers=$transformers)"
+        return "SuspendTransformConfiguration(transformers=$transformers, manifest=$manifest)"
     }
 
     override fun equals(other: Any?): Boolean {
@@ -467,12 +481,67 @@ class SuspendTransformConfiguration @InternalSuspendTransformConfigurationApi co
         if (other !is SuspendTransformConfiguration) return false
 
         if (transformers != other.transformers) return false
+        if (manifest != other.manifest) return false
 
         return true
     }
 
     override fun hashCode(): Int {
-        return transformers.hashCode()
+        var result = transformers.hashCode()
+        result = 31 * result + (manifest?.hashCode() ?: 0)
+        return result
+    }
+}
+
+/**
+ * Stable bridge manifest output settings.
+ *
+ * The manifest lists, for every source `suspend` declaration, every generated
+ * bridge member together with its erased JVM signature. The output is
+ * deterministic: records are sorted by a stable declaration key, source paths
+ * are stored module-relative to [rootDir], and no timestamps, absolute paths or
+ * object identities are emitted.
+ *
+ * @since 0.15.0
+ */
+@Serializable
+class ManifestConfiguration @InternalSuspendTransformConfigurationApi constructor(
+    /**
+     * Absolute path of the module root. Source file paths are relativized
+     * against this directory before they are written to the manifest.
+     */
+    val rootDir: String,
+
+    /**
+     * Manifest output file. Relative paths are resolved against [rootDir].
+     */
+    val outputFile: String,
+
+    /**
+     * Logical module name recorded in the manifest header.
+     */
+    val moduleName: String = "",
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ManifestConfiguration) return false
+
+        if (rootDir != other.rootDir) return false
+        if (outputFile != other.outputFile) return false
+        if (moduleName != other.moduleName) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = rootDir.hashCode()
+        result = 31 * result + outputFile.hashCode()
+        result = 31 * result + moduleName.hashCode()
+        return result
+    }
+
+    override fun toString(): String {
+        return "ManifestConfiguration(rootDir='$rootDir', outputFile='$outputFile', moduleName='$moduleName')"
     }
 }
 
@@ -488,7 +557,8 @@ operator fun SuspendTransformConfiguration.plus(other: SuspendTransformConfigura
                     if (old == null) transformers.toList() else old + transformers
                 }
             }
-        }
+        },
+        manifest = other.manifest ?: manifest
     )
 }
 
